@@ -1,8 +1,8 @@
 require 'minitest/autorun'
-require 'rack/brotli/version'
+require 'rack/compress/version'
 
-describe Rack::Brotli::Version do
+describe Rack::Compress::Version do
   it '#to_s' do
-    _(Rack::Brotli::Version.to_s).must_equal('1.2.0')
+    _(Rack::Compress::Version.to_s).must_equal('0.1.0')
   end
 end

@@ -1,12 +1,14 @@
-require "brotli"
+# frozen_string_literal: true
+
 require 'rack/utils'
 
-module Rack::Brotli
+module Rack::Compress
   # This middleware enables compression of http responses.
   #
   # Currently supported compression algorithms:
   #
-  #   * br
+  #   * br # gem 'brotli'
+  #   * zstd # gem 'extlz4'
   #
   # The middleware automatically detects when compression is supported
   # and allowed. For example no transformation is made when a cache
@@ -14,20 +16,20 @@ module Rack::Brotli
   # code is one that doesn't allow an entity body.
   class Deflater
     ##
-    # Creates Rack::Brotli middleware.
+    # Creates Rack::Compress middleware.
     #
     # [app] rack app instance
     # [options] hash of deflater options, i.e.
     #           'if' - a lambda enabling / disabling deflation based on returned boolean value
     #                  e.g use Rack::Brotli, :if => lambda { |env, status, headers, body| body.map(&:bytesize).reduce(0, :+) > 512 }
     #           'include' - a list of content types that should be compressed
-    #           'deflater' - Brotli compression options
+    #           'levels' - Compression levels
     def initialize(app, options = {})
       @app = app
 
       @condition = options[:if]
       @compressible_types = options[:include]
-      @deflater_options = { quality: 5 }.merge(options[:deflater] || {})
+      @levels_options = { brotli: 4, zstd: 5 }.merge(options[:levels] || {})
     end
 
     def call(env)
@@ -40,8 +42,7 @@ module Rack::Brotli
 
       request = Rack::Request.new(env)
 
-      encoding = Rack::Utils.select_best_encoding(%w(br),
-                                            request.accept_encoding)
+      encoding = Rack::Utils.select_best_encoding(%w(zstd br), request.accept_encoding)
 
       return [status, headers, body] unless encoding
 
@@ -52,10 +53,14 @@ module Rack::Brotli
       end
 
       case encoding
+      when "zstd"
+        headers['Content-Encoding'] = "zstd"
+        headers.delete(Rack::CONTENT_LENGTH)
+        [status, headers, ZstandardStream.new(body, @levels_options[:zstd])]
       when "br"
         headers['Content-Encoding'] = "br"
         headers.delete(Rack::CONTENT_LENGTH)
-        [status, headers, BrotliStream.new(body, @deflater_options)]
+        [status, headers, BrotliStream.new(body, @levels_options[:brotli])]
       when nil
         message = "An acceptable encoding for the requested resource #{request.fullpath} could not be found."
         bp = Rack::BodyProxy.new([message]) { body.close if body.respond_to?(:close) }
@@ -66,19 +71,22 @@ module Rack::Brotli
     class BrotliStream
       include Rack::Utils
 
-      def initialize(body, options)
+      def initialize(body, level)
         @body = body
-        @options = options
+        @level = level
       end
 
       def each(&block)
         @writer = block
         # Use String.new instead of '' to support environments with strings frozen by default.
         buffer = String.new
-        @body.each { |part|
+        @body.each do |part|
           buffer << part
-        }
-        yield ::Brotli.deflate(buffer, @options)
+        end
+
+        # TODO: implement Brotli using streaming classes
+
+        yield ::Brotli.deflate(buffer, { quality: @level })
       ensure
         @writer = nil
       end
@@ -87,7 +95,33 @@ module Rack::Brotli
         @body.close if @body.respond_to?(:close)
       end
     end
-    
+
+    class ZstandardStream
+      include Rack::Utils
+
+      def initialize(body, level)
+        @body = body
+        @level = level
+        @compressor = ::Zstd::StreamingCompress.new(level)
+      end
+
+      def each(&block)
+        @writer = block
+
+        @body.each do |part|
+          @compressor << part
+        end
+
+        yield @compressor.finish
+      ensure
+        @writer = nil
+      end
+
+      def close
+        @body.close if @body.respond_to?(:close)
+      end
+    end
+
     private
 
     def should_deflate?(env, status, headers, body)

@@ -1,11 +1,14 @@
 require 'minitest/autorun'
 require 'stringio'
-require 'rack/brotli'
+require 'rack/compress'
+require 'rack/request'
 require 'rack/lint'
 require 'rack/mock'
 
-describe Rack::Brotli do
+require 'brotli'
+require 'zstd-ruby'
 
+describe Rack::Compress do
   def build_response(status, body, accept_encoding, options = {})
     body = [body] if body.respond_to? :to_str
     app = lambda do |env|
@@ -15,7 +18,7 @@ describe Rack::Brotli do
     end
 
     request = Rack::MockRequest.env_for('', (options['request_headers'] || {}).merge('HTTP_ACCEPT_ENCODING' => accept_encoding))
-    deflater = Rack::Lint.new Rack::Brotli::Deflater.new(app, options['deflater_options'] || {})
+    deflater = Rack::Lint.new Rack::Compress::Deflater.new(app, options['deflater_options'] || {})
 
     deflater.call(request)
   end
@@ -59,15 +62,18 @@ describe Rack::Brotli do
       body_text = String.new
       body.each { |part| body_text << part }
 
+
       deflated_body = case expected_encoding
-                        when 'br'
-                          io = StringIO.new(body_text)
-                          string_body = io.string
-                          string_body.size.must_equal response_size if response_size
-                          Brotli.inflate(string_body)
-                        else
-                          body_text
+                      when 'br'
+                        body_text.length.must_equal(response_size) if response_size
+                        Brotli.inflate(body_text)
+                      when 'zstd'
+                        body_text.length.must_equal(response_size) if response_size
+                        Zstd.decompress(body_text)
+                      else
+                        body_text
                       end
+
 
       deflated_body.must_equal expected_body
     end
@@ -349,12 +355,12 @@ describe Rack::Brotli do
     verify(200, response, 'br', options)
   end
 
-  it "use provided deflate options" do
+  it "use provided br deflate options" do
     response = 'Hello World!' * 2
     options = {
       'deflater_options' => {
-        :deflater => {
-          mode: :generic, quality: 1, lgwin: 10, lgblock: 24
+        :levels => {
+          brotli: 1
         }
       }
     }
@@ -362,9 +368,28 @@ describe Rack::Brotli do
     verify(200, response, 'br', options, 28)
   end
 
-  it "use sensible default deflate options" do
+  it "use provided zstd deflate options" do
+    response = 'Hello World!' * 2
+    options = {
+      'deflater_options' => {
+        :levels => {
+          zstd: 19
+        }
+      }
+    }
+
+    verify(200, response, 'zstd', options, 27)
+  end
+
+  it "use sensible default br deflate options" do
     response = 'Hello World!' * 2
 
-    verify(200, response, 'br', {}, 19)
+    verify(200, response, 'br', {}, 23)
+  end
+
+  it "use sensible default zstd deflate options" do
+    response = 'Hello World!' * 2
+
+    verify(200, response, 'zstd', {}, 33)
   end
 end
