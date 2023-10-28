@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require 'rack/utils'
+require 'zstd-ruby'
+require 'brotli'
 
 module Rack::Compress
   # This middleware enables compression of http responses.
@@ -47,18 +49,18 @@ module Rack::Compress
       return [status, headers, body] unless encoding
 
       # Set the Vary HTTP header.
-      vary = headers["Vary"].to_s.split(",").map(&:strip)
-      unless vary.include?("*") || vary.include?("Accept-Encoding")
-        headers["Vary"] = vary.push("Accept-Encoding").join(",")
+      vary = headers["vary"].to_s.split(",").map(&:strip)
+      unless vary.include?("*") || vary.include?("accept-encoding")
+        headers["vary"] = vary.push("accept-encoding").join(",")
       end
 
       case encoding
       when "zstd"
-        headers['Content-Encoding'] = "zstd"
+        headers['content-encoding'] = "zstd"
         headers.delete(Rack::CONTENT_LENGTH)
         [status, headers, ZstandardStream.new(body, @levels_options[:zstd])]
       when "br"
-        headers['Content-Encoding'] = "br"
+        headers['content-encoding'] = "br"
         headers.delete(Rack::CONTENT_LENGTH)
         [status, headers, BrotliStream.new(body, @levels_options[:brotli])]
       when nil
@@ -129,7 +131,7 @@ module Rack::Compress
       # no-transform set.
       if Rack::Utils::STATUS_WITH_NO_ENTITY_BODY.include?(status) ||
           headers[Rack::CACHE_CONTROL].to_s =~ /\bno-transform\b/ ||
-         (headers['Content-Encoding'] && headers['Content-Encoding'] !~ /\bidentity\b/)
+         (headers['content-encoding'] && headers['content-encoding'] !~ /\bidentity\b/)
         return false
       end
 
