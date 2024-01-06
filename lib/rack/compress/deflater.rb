@@ -111,7 +111,7 @@ module Rack::Compress
         @writer = block
 
         @body.each do |part|
-          @compressor << part
+          yield @compressor.compress(part)
         end
 
         yield @compressor.finish
