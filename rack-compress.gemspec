@@ -39,5 +39,4 @@ Gem::Specification.new do |s|
   s.homepage = "http://github.com/andrepiske/rack-compress/"
   s.rdoc_options = ["--line-numbers", "--inline-source", "--title", "rack-brotli", "--main", "README"]
   s.require_paths = %w[lib]
-  s.rubygems_version = '0.1.0'
 end
