@@ -104,7 +104,7 @@ module Rack::Compress
       def initialize(body, level)
         @body = body
         @level = level
-        @compressor = ::Zstd::StreamingCompress.new(level)
+        @compressor = ::Zstd::StreamingCompress.new(level: level)
       end
 
       def each(&block)
