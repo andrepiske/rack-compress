@@ -54,7 +54,7 @@ describe Rack::Compress do
     )
 
     # verify status
-    status.must_equal expected_status
+    _(status).must_equal expected_status
 
     # verify body
     unless options['skip_body_verify']
@@ -65,17 +65,17 @@ describe Rack::Compress do
 
       deflated_body = case expected_encoding
                       when 'br'
-                        body_text.length.must_equal(response_size) if response_size
+                        _(body_text.length).must_equal(response_size) if response_size
                         Brotli.inflate(body_text)
                       when 'zstd'
-                        body_text.length.must_equal(response_size) if response_size
+                        _(body_text.length).must_equal(response_size) if response_size
                         Zstd.decompress(body_text)
                       else
                         body_text
                       end
 
 
-      deflated_body.must_equal expected_body
+      _(deflated_body).must_equal expected_body
     end
 
     # yield full response verification
@@ -95,7 +95,7 @@ describe Rack::Compress do
     class << app_body; def each; yield('foo'); yield('bar'); end; end
 
     verify(200, 'foobar', br_encoding, { 'app_body' => app_body }) do |status, headers, body|
-      headers.must_equal({
+      _(headers).must_equal({
                            'content-encoding' => 'br',
                            'vary' => 'accept-encoding',
                            'content-type' => 'text/plain'
@@ -109,7 +109,7 @@ describe Rack::Compress do
       class << app_body; def each; yield('foo'); yield('bar'); end; end
 
       verify(200, app_body, br_encoding, { 'skip_body_verify' => true }) do |status, headers, body|
-        headers.must_equal({
+        _(headers).must_equal({
                              'content-encoding' => 'br',
                              'vary' => 'accept-encoding',
                              'content-type' => 'text/plain'
@@ -120,7 +120,7 @@ describe Rack::Compress do
         body.each { |part| buf << inflater.inflate(part) }
         buf << inflater.finish
 
-        buf.delete_if { |part| part.empty? }.join.must_equal 'foobar'
+        _(buf.delete_if { |part| part.empty? }.join).must_equal 'foobar'
       end
     end
   end
@@ -130,7 +130,7 @@ describe Rack::Compress do
     class << app_body; def each; yield('foo'); yield('bar'); end; end
     opts = { 'skip_body_verify' => true }
     verify(200, app_body, 'br', opts) do |status, headers, body|
-      headers.must_equal({
+      _(headers).must_equal({
                            'content-encoding' => 'br',
                            'vary' => 'accept-encoding',
                            'content-type' => 'text/plain'
@@ -147,14 +147,14 @@ describe Rack::Compress do
         end
       end
       #inflater.finish
-      buf.must_equal(%w(foobar))
+      _(buf).must_equal(%w(foobar))
     end
   end
 
   # TODO: This is really just a special case of the above...
   it 'be able to deflate String bodies' do
     verify(200, 'Hello world!', br_encoding) do |status, headers, body|
-      headers.must_equal({
+      _(headers).must_equal({
                            'content-encoding' => 'br',
                            'vary' => 'accept-encoding',
                            'content-type' => 'text/plain'
@@ -167,7 +167,7 @@ describe Rack::Compress do
     class << app_body; def each; yield('foo'); yield('bar'); end; end
 
     verify(200, 'foobar', 'br', { 'app_body' => app_body }) do |status, headers, body|
-      headers.must_equal({
+      _(headers).must_equal({
                            'content-encoding' => 'br',
                            'vary' => 'accept-encoding',
                            'content-type' => 'text/plain'
@@ -181,7 +181,7 @@ describe Rack::Compress do
       class << app_body; def each; yield('foo'); yield('bar'); end; end
 
       verify(200, app_body, 'br', { 'skip_body_verify' => true }) do |status, headers, body|
-        headers.must_equal({
+        _(headers).must_equal({
                              'content-encoding' => 'br',
                              'vary' => 'accept-encoding',
                              'content-type' => 'text/plain'
@@ -192,14 +192,14 @@ describe Rack::Compress do
         body.each { |part| buf << inflater.inflate(part) }
         buf << inflater.finish
 
-        buf.delete_if { |part| part.empty? }.join.must_equal 'foobar'
+        _(buf.delete_if { |part| part.empty? }.join).must_equal 'foobar'
       end
     end
   end
 
   it 'be able to fallback to no deflation' do
     verify(200, 'Hello world!', 'superzip') do |status, headers, body|
-      headers.must_equal({
+      _(headers).must_equal({
                            'content-type' => 'text/plain'
                          })
     end
@@ -207,7 +207,7 @@ describe Rack::Compress do
 
   it 'be able to skip when there is no response entity body' do
     verify(304, '', { 'br' => nil }, { 'app_body' => [] }) do |status, headers, body|
-      headers.must_equal({})
+      _(headers).must_equal({})
     end
   end
 
@@ -231,13 +231,13 @@ describe Rack::Compress do
     }
 
     verify(200, not_found_body1, 'identity;q=0', options1) do |status, headers, body|
-      headers.must_equal({
+      _(headers).must_equal({
                            'content-type' => 'text/plain'
                          })
     end
 
     verify(200, not_found_body2, 'identity;q=0', options2) do |status, headers, body|
-      headers.must_equal({
+      _(headers).must_equal({
                            'content-type' => 'text/plain'
                          })
     end
@@ -251,7 +251,7 @@ describe Rack::Compress do
       }
     }
     verify(200, 'Hello World!', { 'br' => nil }, options) do |status, headers, body|
-      headers.wont_include 'content-encoding'
+      _(headers).wont_include 'content-encoding'
     end
   end
 
@@ -378,7 +378,7 @@ describe Rack::Compress do
       }
     }
 
-    verify(200, response, 'zstd', options, 27)
+    verify(200, response, 'zstd', options, 28)
   end
 
   it "use sensible default br deflate options" do
